@@ -1,0 +1,101 @@
+import os
+import jira
+import win32com.client
+from datetime import date
+
+all_issues_dict={}
+issue_key_list=[]
+issue_id_list=[]
+issue_summary_list=[]
+issue_sr_no_list=[]
+issue_status_list=[]
+issue_comments_list=[]
+issue_assignee_list=[]
+
+today=date.today().strftime("%d %B %Y")
+
+options={"server":"https://jira.atlassian.com","verify":False}
+
+#Below is the proxy required to access JIRA URL
+os.environ["HTTPS_PROXY"]="https://abcd:1234"
+
+#Below is username , password
+my_jira=jira.JIRA(options,basic_auth=("xyz@abc.com","abcd123")) 
+
+#Below is the JIRA filter
+all_issues = my_jira.search_issues("project = BSWMD AND issuetype = Bug AND status in (Open, New) AND labels = xyz ORDER BY assignee ASC, summary ASC")
+
+sr_no = 1
+
+for my_issue in all_issues:
+    print('Currently working on ' ,my_issue)
+    issue_key=my_issue.key
+    issue_status=my_issue.fields.status
+    issue_status1=str(issue_status)
+    issue_summary=my_issue.fields.summary
+    issue_key_list.append(my_issue.key)
+    issue_id_list.append(my_issue.id)
+    issue_status_list.append(my_issue.fields.status)
+    issue_summary_list.append(my_issue.fields.summary)
+    issue_sr_no_list.append(sr_no)
+    issue_assignee_list.append(my_issue.fields.assignee)
+        
+    all_comments=my_jira.comments(my_issue.key)
+    
+    
+    a=int(0)
+    for i in all_comments:
+     if int(i.id)>a:
+         a=int(i.id)
+    latest_comment=my_jira.comment(my_issue.key,a).body
+    
+    issue_comments_list.append(latest_comment)    
+    sr_no+=1
+    
+all_issues_dict['SR No']=issue_sr_no_list
+all_issues_dict['Issue Key']=issue_key_list
+all_issues_dict['Issue Id']=issue_id_list
+all_issues_dict['Status']=issue_status_list
+all_issues_dict['Assigned To']=issue_assignee_list
+all_issues_dict['Summary']=issue_summary_list
+all_issues_dict['Comments']=issue_comments_list
+
+subject=' Daily Defects'+' | '+today
+
+outlook = win32com.client.Dispatch('outlook.application')
+
+newmail=outlook.CreateItem(0x0)
+newmail.subject= subject
+newmail.to='xyz@abc.com'
+newmail.cc='def@abc.com'
+
+print(all_issues_dict)
+
+keys = all_issues_dict.keys()
+length = len(all_issues_dict['Issue Key'])
+
+print(length)
+
+items = ['<body>','Hi Team,','<br><br>PSB following defects in our queue.<br>','</body>','<br><table border="1">', '<tr>']
+for k in keys:
+    items.append('<th bgcolor="#87ceeb">%s</th>' % k)
+items.append('</tr>')
+
+for i in range(length):
+    items.append('<tr>')
+    for k in keys:
+        if (k == 'Issue Key'):
+            print(all_issues_dict[k][i])
+            my_href='https://jira.atlassian.com'+all_issues_dict[k][i]
+            items.append('<td><a class="active" href=%s>%s</a></td>' % (my_href ,all_issues_dict[k][i]))
+        else:
+            items.append('<td>%s</td>' % all_issues_dict[k][i])
+    items.append('</tr>')
+
+items.append('</table>')
+items.append('<br><br><body>Thanks,<br>Poorva</body>')
+
+body=('\n'.join(items))
+
+newmail.HTMLBody=body
+newmail.send()
